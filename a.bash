@@ -12,6 +12,7 @@ SPLIT_DIR="video_parts"
 NUM_PARTS=5
 MAX_SIZE=$((48 * 1024 * 1024))  # 48MB Telegram file size limit
 LOG_FILE="bot.log"
+ENABLE_STREAMABLE_CHECK=true  # Optional streamable feature
 
 # Redirect logs to a file
 exec > >(tee -i "$LOG_FILE")
@@ -42,6 +43,35 @@ update_telegram_message() {
 # Cleanup temporary files
 cleanup() {
     rm -rf "$SPLIT_DIR" "$TEMP_VIDEO_FILE"
+}
+
+# Check if the video is streamable
+check_streamable() {
+    local file="$1"
+    local chat_id="$2"
+    
+    if [ "$ENABLE_STREAMABLE_CHECK" = true ]; then
+        echo "🔍 Checking if the video is streamable..."
+        ffprobe_output=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1 "$file" 2>&1)
+        if [[ "$ffprobe_output" != *"h264"* ]]; then
+            echo "⚠️ Video is not streamable. Re-encoding..."
+            reencoded_file="reencoded_$TEMP_VIDEO_FILE"
+            ffmpeg -i "$file" -vcodec libx264 -acodec aac "$reencoded_file" -y
+            if [ -f "$reencoded_file" ]; then
+                mv "$reencoded_file" "$file"
+                echo "✅ Video successfully re-encoded to streamable format."
+            else
+                echo "❌ Re-encoding failed."
+                send_telegram_message "$chat_id" "❌ Failed to re-encode the video to a streamable format."
+                return 1
+            fi
+        else
+            echo "✅ Video is already streamable."
+        fi
+    else
+        echo "⚠️ Streamable check is disabled."
+    fi
+    return 0
 }
 
 # Convert bytes to human-readable size
@@ -184,6 +214,12 @@ process_updates() {
 
                 if ! merge_file_parts; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ File merging failed!"
+                    cleanup
+                    continue
+                fi
+
+                if ! check_streamable "$TEMP_VIDEO_FILE" "$chat_id"; then
+                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Streamable check or re-encoding failed!"
                     cleanup
                     continue
                 fi
