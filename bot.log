@@ -1,15 +1,5 @@
 🤖 Bot is running...
-{"ok":true,"result":{"message_id":2029,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737733489,"text":"\ud83c\udf10 Total file size: 10.01 MB. Starting download of big_buck_bunny_720p_10mb.mp4..."}}⬇️ Downloading range: 0-2099734 into video_parts/part_0
-⬇️ Downloading range: 2099735-4199469 into video_parts/part_1
-⬇️ Downloading range: 4199470-6299205 into video_parts/part_2
-⬇️ Downloading range: 6299206-8398940 into video_parts/part_3
-⬇️ Downloading range: 8398941- into video_parts/part_4
-🔗 Merging file parts...
-✅ File successfully merged: big_buck_bunny_720p_10mb.mp4
-🔍 Checking if the video is streamable...
-✅ Video is already streamable.
-📤 Uploading video...
-{"ok":true,"result":{"message_id":2030,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737733499,"video":{"duration":0,"width":320,"height":320,"file_name":"big_buck_bunny_720p_10mb.mp4","mime_type":"video/mp4","file_id":"BAACAgQAAxkDAAIH7meTtXv5DhoJhj69nGfktHY8fzu_AAKRHwAC25GgUDZws_h2JvjyNgQ","file_unique_id":"AgADkR8AAtuRoFA","file_size":10498677},"caption":"big_buck_bunny_720p_10mb.mp4"}}{"ok":true,"result":{"message_id":2033,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737733504,"text":"\ud83c\udf10 Total file size: 20.09 MB. Starting download of big_buck_bunny_720p_20mb.mp4..."}}⬇️ Downloading range: 0-4213934 into video_parts/part_0
+{"ok":true,"result":{"message_id":2049,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737737952,"text":"\ud83c\udf10 Total file size: 20.09 MB. Starting download of big_buck_bunny_720p_20mb.mp4..."}}⬇️ Downloading range: 0-4213934 into video_parts/part_0
 ⬇️ Downloading range: 4213935-8427870 into video_parts/part_1
 ⬇️ Downloading range: 8427871-12641805 into video_parts/part_2
 ⬇️ Downloading range: 12641806-16855741 into video_parts/part_3
@@ -17,6 +7,56 @@
 🔗 Merging file parts...
 ✅ File successfully merged: big_buck_bunny_720p_20mb.mp4
 🔍 Checking if the video is streamable...
-✅ Video is already streamable.
+✅ Video is encoded with H.264. Ensuring MOOV atom placement...
+ffmpeg version 4.2.7-0ubuntu0.1 Copyright (c) 2000-2022 the FFmpeg developers
+  built with gcc 9 (Ubuntu 9.4.0-1ubuntu1~20.04.1)
+  configuration: --prefix=/usr --extra-version=0ubuntu0.1 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --enable-avresample --disable-filter=resample --enable-avisynth --enable-gnutls --enable-ladspa --enable-libaom --enable-libass --enable-libbluray --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libgme --enable-libgsm --enable-libjack --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-libpulse --enable-librsvg --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libssh --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwavpack --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzmq --enable-libzvbi --enable-lv2 --enable-omx --enable-openal --enable-opencl --enable-opengl --enable-sdl2 --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-nvenc --enable-chromaprint --enable-frei0r --enable-libx264 --enable-shared
+  libavutil      56. 31.100 / 56. 31.100
+  libavcodec     58. 54.100 / 58. 54.100
+  libavformat    58. 29.100 / 58. 29.100
+  libavdevice    58.  8.100 / 58.  8.100
+  libavfilter     7. 57.100 /  7. 57.100
+  libavresample   4.  0.  0 /  4.  0.  0
+  libswscale      5.  5.100 /  5.  5.100
+  libswresample   3.  5.100 /  3.  5.100
+  libpostproc    55.  5.100 / 55.  5.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'big_buck_bunny_720p_20mb.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    creation_time   : 1970-01-01T00:00:00.000000Z
+    encoder         : Lavf53.24.2
+  Duration: 00:01:57.31, start: 0.000000, bitrate: 1436 kb/s
+    Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p, 1280x720 [SAR 1:1 DAR 16:9], 1048 kb/s, 25 fps, 25 tbr, 12800 tbn, 50 tbc (default)
+    Metadata:
+      creation_time   : 1970-01-01T00:00:00.000000Z
+      handler_name    : VideoHandler
+    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, 5.1, fltp, 383 kb/s (default)
+    Metadata:
+      creation_time   : 1970-01-01T00:00:00.000000Z
+      handler_name    : SoundHandler
+Output #0, mp4, to 'streamable_big_buck_bunny_720p_20mb.mp4':
+  Metadata:
+    major_brand     : isom
+    minor_version   : 512
+    compatible_brands: isomiso2avc1mp41
+    encoder         : Lavf58.29.100
+    Stream #0:0(und): Video: h264 (Main) (avc1 / 0x31637661), yuv420p, 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 1048 kb/s, 25 fps, 25 tbr, 12800 tbn, 12800 tbc (default)
+    Metadata:
+      creation_time   : 1970-01-01T00:00:00.000000Z
+      handler_name    : VideoHandler
+    Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 48000 Hz, 5.1, fltp, 383 kb/s (default)
+    Metadata:
+      creation_time   : 1970-01-01T00:00:00.000000Z
+      handler_name    : SoundHandler
+Stream mapping:
+  Stream #0:0 -> #0:0 (copy)
+  Stream #0:1 -> #0:1 (copy)
+Press [q] to stop, [?] for help
+[mp4 @ 0x561f609030c0] Starting second pass: moving the moov atom to the beginning of the file
+frame= 2932 fps=0.0 q=-1.0 Lsize=   20576kB time=00:01:57.29 bitrate=1437.1kbits/s speed= 680x    
+video:15013kB audio:5497kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 0.321074%
+✅ MOOV atom moved to the beginning of the file.
 📤 Uploading video...
-{"ok":true,"result":{"message_id":2034,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737733516,"video":{"duration":0,"width":320,"height":320,"file_name":"big_buck_bunny_720p_20mb.mp4","mime_type":"video/mp4","file_id":"BAACAgQAAxkDAAIH8meTtYxYI3oJLepfrZPHvqhXG6QuAAKSHwAC25GgUCHQUyAU7S44NgQ","file_unique_id":"AgADkh8AAtuRoFA","file_size":21069678},"caption":"big_buck_bunny_720p_20mb.mp4"}}
+{"ok":true,"result":{"message_id":2050,"from":{"id":7171540556,"is_bot":true,"first_name":"Rasp","username":"Rasptelegbot"},"chat":{"id":7255882022,"first_name":"Ali","last_name":"Roohy","type":"private"},"date":1737737973,"video":{"duration":0,"width":320,"height":320,"file_name":"big_buck_bunny_720p_20mb.mp4","mime_type":"video/mp4","file_id":"BAACAgQAAxkDAAIIAmeTxvWvz27RZyAzzuMSOLv88VRTAAK7HwAC25GgUFm9rcj8n33KNgQ","file_unique_id":"AgADux8AAtuRoFA","file_size":21069738},"caption":"big_buck_bunny_720p_20mb.mp4"}}

@@ -18,6 +18,12 @@ ENABLE_STREAMABLE_CHECK=true  # Optional streamable feature
 exec > >(tee -i "$LOG_FILE")
 exec 2>&1
 
+log() {
+    local level=$1
+    local message=$2
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $message" | tee -a "$LOG_FILE"
+}
+
 # Function to send a message to Telegram
 send_telegram_message() {
     local chat_id="$1"
@@ -40,6 +46,17 @@ update_telegram_message() {
         -d "parse_mode=HTML" > /dev/null
 }
 
+check_dependencies() {
+    local dependencies=("curl" "ffmpeg" "ffprobe" "jq")
+    for dep in "${dependencies[@]}"; do
+        if ! command -v "$dep" &> /dev/null; then
+            echo "❌ $dep is not installed. Please install it and try again."
+            log "ERROR" "❌ $dep is not installed. Please install it and try again."
+            exit 1
+        fi
+    done
+}
+
 # Cleanup temporary files
 cleanup() {
     rm -rf "$SPLIT_DIR" "$TEMP_VIDEO_FILE"
@@ -49,14 +66,14 @@ cleanup() {
 check_streamable() {
     local file="$1"
     local chat_id="$2"
-    
+
     if [ "$ENABLE_STREAMABLE_CHECK" = true ]; then
         echo "🔍 Checking if the video is streamable..."
         ffprobe_output=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1 "$file" 2>&1)
         if [[ "$ffprobe_output" != *"h264"* ]]; then
             echo "⚠️ Video is not streamable. Re-encoding..."
             reencoded_file="reencoded_$TEMP_VIDEO_FILE"
-            ffmpeg -i "$file" -vcodec libx264 -acodec aac "$reencoded_file" -y
+            ffmpeg -i "$file" -vcodec libx264 -acodec aac -movflags +faststart "$reencoded_file" -y
             if [ -f "$reencoded_file" ]; then
                 mv "$reencoded_file" "$file"
                 echo "✅ Video successfully re-encoded to streamable format."
@@ -66,7 +83,11 @@ check_streamable() {
                 return 1
             fi
         else
-            echo "✅ Video is already streamable."
+            echo "✅ Video is encoded with H.264. Ensuring MOOV atom placement..."
+            streamable_file="streamable_$TEMP_VIDEO_FILE"
+            ffmpeg -i "$file" -movflags +faststart -c copy "$streamable_file" -y
+            mv "$streamable_file" "$file"
+            echo "✅ MOOV atom moved to the beginning of the file."
         fi
     else
         echo "⚠️ Streamable check is disabled."
@@ -218,7 +239,7 @@ process_updates() {
                 fi
 
                 if ! check_streamable "$TEMP_VIDEO_FILE" "$chat_id"; then
-                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Streamable check or re-encoding failed!"
+                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Streamable check or re-encoding failed! Please ensure the video format is supported."
                     cleanup
                     continue
                 fi
@@ -244,4 +265,5 @@ process_updates() {
 
 # Start the Bot
 echo "🤖 Bot is running..."
+check_dependencies
 process_updates
