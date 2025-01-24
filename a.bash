@@ -85,7 +85,6 @@ human_readable_size() {
         echo "$(awk "BEGIN {printf \"%.2f\", $size / 1024}") KB"
     fi
 }
-
 # Download file parts with progress
 download_file_parts() {
     local url="$1"
