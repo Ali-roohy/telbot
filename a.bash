@@ -3,7 +3,7 @@
 # Configuration
 BOT_TOKEN=${BOT_TOKEN_ENV}
 if [ -z "$BOT_TOKEN" ]; then
-    echo "❌ BOT_TOKEN is not set. Exiting..."
+    log "ERROR" "❌ BOT_TOKEN is not set. Exiting..."
     exit 1
 fi
 
@@ -18,6 +18,7 @@ ENABLE_STREAMABLE_CHECK=true  # Optional streamable feature
 exec > >(tee -i "$LOG_FILE")
 exec 2>&1
 
+# Logging function
 log() {
     local level=$1
     local message=$2
@@ -46,11 +47,11 @@ update_telegram_message() {
         -d "parse_mode=HTML" > /dev/null
 }
 
+# Check dependencies
 check_dependencies() {
     local dependencies=("curl" "ffmpeg" "ffprobe" "jq")
     for dep in "${dependencies[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
-            echo "❌ $dep is not installed. Please install it and try again."
             log "ERROR" "❌ $dep is not installed. Please install it and try again."
             exit 1
         fi
@@ -60,6 +61,7 @@ check_dependencies() {
 # Cleanup temporary files
 cleanup() {
     rm -rf "$SPLIT_DIR" "$TEMP_VIDEO_FILE"
+    log "INFO" "✅ Cleaned up temporary files."
 }
 
 # Check if the video is streamable
@@ -68,29 +70,29 @@ check_streamable() {
     local chat_id="$2"
 
     if [ "$ENABLE_STREAMABLE_CHECK" = true ]; then
-        echo "🔍 Checking if the video is streamable..."
+        log "INFO" "🔍 Checking if the video is streamable..."
         ffprobe_output=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1 "$file" 2>&1)
         if [[ "$ffprobe_output" != *"h264"* ]]; then
-            echo "⚠️ Video is not streamable. Re-encoding..."
+            log "WARNING" "⚠️ Video is not streamable. Re-encoding..."
             reencoded_file="reencoded_$TEMP_VIDEO_FILE"
             ffmpeg -i "$file" -vcodec libx264 -acodec aac -movflags +faststart "$reencoded_file" -y
             if [ -f "$reencoded_file" ]; then
                 mv "$reencoded_file" "$file"
-                echo "✅ Video successfully re-encoded to streamable format."
+                log "INFO" "✅ Video successfully re-encoded to streamable format."
             else
-                echo "❌ Re-encoding failed."
+                log "ERROR" "❌ Re-encoding failed."
                 send_telegram_message "$chat_id" "❌ Failed to re-encode the video to a streamable format."
                 return 1
             fi
         else
-            echo "✅ Video is encoded with H.264. Ensuring MOOV atom placement..."
+            log "INFO" "✅ Video is encoded with H.264. Ensuring MOOV atom placement..."
             streamable_file="streamable_$TEMP_VIDEO_FILE"
             ffmpeg -i "$file" -movflags +faststart -c copy "$streamable_file" -y
             mv "$streamable_file" "$file"
-            echo "✅ MOOV atom moved to the beginning of the file."
+            log "INFO" "✅ MOOV atom moved to the beginning of the file."
         fi
     else
-        echo "⚠️ Streamable check is disabled."
+        log "INFO" "⚠️ Streamable check is disabled."
     fi
     return 0
 }
@@ -106,6 +108,7 @@ human_readable_size() {
         echo "$(awk "BEGIN {printf \"%.2f\", $size / 1024}") KB"
     fi
 }
+
 # Download file parts with progress
 download_file_parts() {
     local url="$1"
@@ -128,13 +131,14 @@ download_file_parts() {
     fi
 
     mkdir -p "$SPLIT_DIR"
+    log "INFO" "📁 Created directory for video parts: $SPLIT_DIR"
 
     for i in $(seq 0 $((NUM_PARTS - 1))); do
         local start=$((i * total_size / NUM_PARTS))
         local end=$(((i + 1) * total_size / NUM_PARTS - 1))
         [ $i -eq $((NUM_PARTS - 1)) ] && end=""
 
-        echo "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
+        log "INFO" "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
 
         temp_log="curl_log_$i.txt"  # Temporary log for curl output
         curl -L --connect-timeout 15 "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
@@ -142,6 +146,7 @@ download_file_parts() {
         rm -f "$temp_log"
 
         if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
+            log "ERROR" "❌ Error downloading range $start-$end of $file_name."
             send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name."
             return 1
         fi
@@ -153,18 +158,19 @@ download_file_parts() {
             update_telegram_message "$chat_id" "$message_id" "📥 Downloading part $((i + 1)) of $NUM_PARTS..."
         fi
     done
+    log "INFO" "✅ All parts downloaded successfully."
     return 0
 }
 
 # Merge file parts
 merge_file_parts() {
-    echo "🔗 Merging file parts..."
+    log "INFO" "🔗 Merging file parts..."
     cat "$SPLIT_DIR"/part_* > "$TEMP_VIDEO_FILE"
     if [ ! -f "$TEMP_VIDEO_FILE" ]; then
-        echo "❌ Merging failed!"
+        log "ERROR" "❌ Merging failed!"
         return 1
     fi
-    echo "✅ File successfully merged: $TEMP_VIDEO_FILE"
+    log "INFO" "✅ File successfully merged: $TEMP_VIDEO_FILE"
     return 0
 }
 
@@ -177,7 +183,7 @@ upload_file() {
     local file_size=$(stat -c%s "$file")
 
     if [ $file_size -gt $MAX_SIZE ]; then
-        echo "✂️ File exceeds 48MB. Splitting before upload..."
+        log "INFO" "✂️ File exceeds 48MB. Splitting before upload..."
         split -b $MAX_SIZE "$file" "$SPLIT_DIR/part_"
         local total_parts=$(ls "$SPLIT_DIR"/part_* | wc -l)
         local current_part=1
@@ -188,21 +194,22 @@ upload_file() {
                 -F "chat_id=$chat_id" \
                 -F "document=@$part" \
                 -F "caption=Part $current_part of $total_parts: $file_name" || {
-                echo "❌ Failed to upload part $current_part"
+                log "ERROR" "❌ Failed to upload part $current_part"
                 return 1
             }
             current_part=$((current_part + 1))
         done
     else
-        echo "📤 Uploading video..."
+        log "INFO" "📤 Uploading video..."
         curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
             -F "chat_id=$chat_id" \
             -F "video=@$file" \
             -F "caption=$file_name" || {
-            echo "❌ Upload failed!"
+            log "ERROR" "❌ Upload failed!"
             return 1
         }
     fi
+    log "INFO" "✅ File uploaded successfully."
     return 0
 }
 
@@ -264,6 +271,6 @@ process_updates() {
 }
 
 # Start the Bot
-echo "🤖 Bot is running..."
+log "INFO" "🤖 Bot is running..."
 check_dependencies
 process_updates
