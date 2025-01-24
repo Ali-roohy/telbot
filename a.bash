@@ -62,6 +62,11 @@ download_file_parts() {
     local chat_id="$2"
     local message_id="$3"
 
+    content_disposition=$(curl -sI --connect-timeout 15 "$url" | grep -i "Content-Disposition" | awk -F'filename=' '{print $2}' | tr -d '\r\n"')
+    file_name=$(basename "$content_disposition")
+    [ -z "$file_name" ] && file_name=$(basename "$url")
+    TEMP_VIDEO_FILE="$file_name"
+
     total_size=$(curl -sI --connect-timeout 15 "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
 
     if [ -z "$total_size" ]; then
@@ -69,7 +74,7 @@ download_file_parts() {
         total_size=-1  # Set to -1 if size is not retrievable
     else
         readable_size=$(human_readable_size "$total_size")
-        send_telegram_message "$chat_id" "🌐 Total file size: $readable_size. Starting download..."
+        send_telegram_message "$chat_id" "🌐 Total file size: $readable_size. Starting download of $file_name..."
     fi
 
     mkdir -p "$SPLIT_DIR"
@@ -87,7 +92,7 @@ download_file_parts() {
         rm -f "$temp_log"
 
         if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
-            send_telegram_message "$chat_id" "❌ Error downloading range $start-$end."
+            send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name."
             return 1
         fi
 
