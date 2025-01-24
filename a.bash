@@ -2,6 +2,11 @@
 
 # Configuration
 BOT_TOKEN=${BOT_TOKEN_ENV}
+if [ -z "$BOT_TOKEN" ]; then
+    echo "❌ BOT_TOKEN is not set. Exiting..."
+    exit 1
+fi
+
 TEMP_VIDEO_FILE="downloaded_video.mp4"
 SPLIT_DIR="video_parts"
 NUM_PARTS=5
@@ -57,7 +62,7 @@ download_file_parts() {
     local chat_id="$2"
     local message_id="$3"
 
-    total_size=$(curl -sI "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
+    total_size=$(curl -sI --connect-timeout 15 "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
 
     if [ -z "$total_size" ]; then
         send_telegram_message "$chat_id" "❌ Unable to determine file size. Progress tracking will be disabled."
@@ -77,7 +82,7 @@ download_file_parts() {
         echo "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
 
         temp_log="curl_log_$i.txt"  # Temporary log for curl output
-        curl -L "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
+        curl -L --connect-timeout 15 "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
         size_downloaded=$(cat "$temp_log")
         rm -f "$temp_log"
 
@@ -108,11 +113,12 @@ merge_file_parts() {
     return 0
 }
 
-# Upload file parts with progress
+# Upload file with the file name in the caption
 upload_file() {
     local file="$1"
     local chat_id="$2"
     local message_id="$3"
+    local file_name=$(basename "$file")
     local file_size=$(stat -c%s "$file")
 
     if [ $file_size -gt $MAX_SIZE ]; then
@@ -126,7 +132,7 @@ upload_file() {
             curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
                 -F "chat_id=$chat_id" \
                 -F "document=@$part" \
-                -F "caption=Part $current_part of $total_parts" || {
+                -F "caption=Part $current_part of $total_parts: $file_name" || {
                 echo "❌ Failed to upload part $current_part"
                 return 1
             }
@@ -137,7 +143,7 @@ upload_file() {
         curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
             -F "chat_id=$chat_id" \
             -F "video=@$file" \
-            -F "caption=Here is your video!" || {
+            -F "caption=$file_name" || {
             echo "❌ Upload failed!"
             return 1
         }
@@ -149,7 +155,12 @@ upload_file() {
 process_updates() {
     local offset=0
     while true; do
-        updates=$(curl -s "https://api.telegram.org/bot$BOT_TOKEN/getUpdates?offset=$offset")
+        updates=$(curl -s --connect-timeout 15 "https://api.telegram.org/bot$BOT_TOKEN/getUpdates?offset=$offset")
+        if [ -z "$(echo "$updates" | jq -c '.result[]')" ]; then
+            sleep 1
+            continue
+        fi
+
         for row in $(echo "$updates" | jq -c '.result[]'); do
             update_id=$(echo "$row" | jq -r '.update_id')
             chat_id=$(echo "$row" | jq -r '.message.chat.id')
