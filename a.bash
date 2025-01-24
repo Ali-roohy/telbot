@@ -97,6 +97,24 @@ check_streamable() {
     return 0
 }
 
+# Compress video to fit within the 48MB limit
+compress_video() {
+    local file="$1"
+    local compressed_file="compressed_$file"
+    log "INFO" "🔧 Attempting to compress video to fit within 48MB..."
+
+    # Use a more robust ffmpeg command to handle audio and video streams
+    ffmpeg -i "$file" -vcodec libx264 -crf 28 -preset fast -acodec aac -b:a 128k -movflags +faststart "$compressed_file" -y
+    if [ $? -eq 0 ] && [ -f "$compressed_file" ]; then
+        mv "$compressed_file" "$file"
+        log "INFO" "✅ Video compressed successfully."
+        return 0
+    else
+        log "ERROR" "❌ Video compression failed."
+        return 1
+    fi
+}
+
 # Convert bytes to human-readable size
 human_readable_size() {
     local size=$1
@@ -183,22 +201,41 @@ upload_file() {
     local file_size=$(stat -c%s "$file")
 
     if [ $file_size -gt $MAX_SIZE ]; then
-        log "INFO" "✂️ File exceeds 48MB. Splitting before upload..."
-        split -b $MAX_SIZE "$file" "$SPLIT_DIR/part_"
-        local total_parts=$(ls "$SPLIT_DIR"/part_* | wc -l)
-        local current_part=1
-        for part in "$SPLIT_DIR"/part_*; do
-            progress=$((current_part * 100 / total_parts))
-            update_telegram_message "$chat_id" "$message_id" "📤 Uploading part $current_part of $total_parts (${progress}%)..."
-            curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
-                -F "chat_id=$chat_id" \
-                -F "document=@$part" \
-                -F "caption=Part $current_part of $total_parts: $file_name" || {
-                log "ERROR" "❌ Failed to upload part $current_part"
+        log "INFO" "✂️ File exceeds 48MB. Attempting to compress..."
+        if ! compress_video "$file"; then
+            log "INFO" "⚠️ Compression failed. Splitting file..."
+            split -b $MAX_SIZE "$file" "$SPLIT_DIR/part_"
+            local total_parts=$(ls "$SPLIT_DIR"/part_* | wc -l)
+            local current_part=1
+            for part in "$SPLIT_DIR"/part_*; do
+                progress=$((current_part * 100 / total_parts))
+                update_telegram_message "$chat_id" "$message_id" "📤 Uploading part $current_part of $total_parts (${progress}%)..."
+                curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendDocument" \
+                    -F "chat_id=$chat_id" \
+                    -F "document=@$part" \
+                    -F "caption=Part $current_part of $total_parts: $file_name" || {
+                    log "ERROR" "❌ Failed to upload part $current_part"
+                    return 1
+                }
+                current_part=$((current_part + 1))
+            done
+        else
+            # Retry upload after compression
+            file_size=$(stat -c%s "$file")
+            if [ $file_size -le $MAX_SIZE ]; then
+                log "INFO" "📤 Uploading compressed video..."
+                curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
+                    -F "chat_id=$chat_id" \
+                    -F "video=@$file" \
+                    -F "caption=$file_name" || {
+                    log "ERROR" "❌ Upload failed!"
+                    return 1
+                }
+            else
+                log "ERROR" "❌ Compression did not reduce file size below 48MB."
                 return 1
-            }
-            current_part=$((current_part + 1))
-        done
+            fi
+        fi
     else
         log "INFO" "📤 Uploading video..."
         curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendVideo" \
