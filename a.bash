@@ -64,32 +64,42 @@ cleanup() {
     log "INFO" "✅ Cleaned up temporary files."
 }
 
-# Check if the video is streamable
+# Check if the video is streamable (after full download)
 check_streamable() {
     local file="$1"
     local chat_id="$2"
 
     if [ "$ENABLE_STREAMABLE_CHECK" = true ]; then
         log "INFO" "🔍 Checking if the video is streamable..."
+
+        # Check if the video is encoded with H.264
         ffprobe_output=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1 "$file" 2>&1)
         if [[ "$ffprobe_output" != *"h264"* ]]; then
-            log "WARNING" "⚠️ Video is not streamable. Re-encoding..."
+            log "WARNING" "⚠️ Video is not encoded with H.264. Re-encoding..."
             reencoded_file="reencoded_$TEMP_VIDEO_FILE"
-            ffmpeg -i "$file" -vcodec libx264 -acodec aac -movflags +faststart "$reencoded_file" -y
+            ffmpeg -i "$file" -vcodec libx264 -acodec aac -movflags +faststart -force_key_frames "expr:gte(t,n_forced*1)" "$reencoded_file" -y
             if [ -f "$reencoded_file" ]; then
                 mv "$reencoded_file" "$file"
-                log "INFO" "✅ Video successfully re-encoded to streamable format."
+                log "INFO" "✅ Video successfully re-encoded to H.264 with a keyframe at the start."
             else
                 log "ERROR" "❌ Re-encoding failed."
                 send_telegram_message "$chat_id" "❌ Failed to re-encode the video to a streamable format."
                 return 1
             fi
         else
-            log "INFO" "✅ Video is encoded with H.264. Ensuring MOOV atom placement..."
+            log "INFO" "✅ Video is encoded with H.264. Ensuring MOOV atom placement and keyframe at the start..."
+
+            # Ensure MOOV atom is at the beginning and force a keyframe at the start
             streamable_file="streamable_$TEMP_VIDEO_FILE"
-            ffmpeg -i "$file" -movflags +faststart -c copy "$streamable_file" -y
-            mv "$streamable_file" "$file"
-            log "INFO" "✅ MOOV atom moved to the beginning of the file."
+            ffmpeg -i "$file" -movflags +faststart -force_key_frames "expr:gte(t,n_forced*1)" -c copy "$streamable_file" -y
+            if [ -f "$streamable_file" ]; then
+                mv "$streamable_file" "$file"
+                log "INFO" "✅ MOOV atom moved to the beginning, and a keyframe is forced at the start."
+            else
+                log "ERROR" "❌ Failed to ensure streamable format."
+                send_telegram_message "$chat_id" "❌ Failed to ensure the video is streamable."
+                return 1
+            fi
         fi
     else
         log "INFO" "⚠️ Streamable check is disabled."
@@ -269,25 +279,29 @@ process_updates() {
                 STATUS_MSG=$(send_telegram_message "$chat_id" "🔄 Starting video processing...")
                 MESSAGE_ID=$(echo "$STATUS_MSG" | jq -r '.result.message_id')
 
-                update_telegram_message "$chat_id" "$MESSAGE_ID" "📥 Downloading file parts..."
+                # Download the video
+                update_telegram_message "$chat_id" "$MESSAGE_ID" "📥 Downloading file..."
                 if ! download_file_parts "$message_text" "$chat_id" "$MESSAGE_ID"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Download failed!"
                     cleanup
                     continue
                 fi
 
+                # Merge file parts
                 if ! merge_file_parts; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ File merging failed!"
                     cleanup
                     continue
                 fi
 
+                # Check streamability and re-encode if necessary
                 if ! check_streamable "$TEMP_VIDEO_FILE" "$chat_id"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Streamable check or re-encoding failed! Please ensure the video format is supported."
                     cleanup
                     continue
                 fi
 
+                # Upload the file
                 update_telegram_message "$chat_id" "$MESSAGE_ID" "📤 Uploading file..."
                 if ! upload_file "$TEMP_VIDEO_FILE" "$chat_id" "$MESSAGE_ID"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Upload failed!"
