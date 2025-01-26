@@ -65,6 +65,12 @@ cleanup() {
     log "INFO" "✅ Cleaned up temporary files."
 }
 
+# Sanitize file name
+sanitize_filename() {
+    local file_name="$1"
+    echo "$file_name" | sed 's/[^a-zA-Z0-9._-]//g'
+}
+
 # Check if the video is streamable (after full download)
 check_streamable() {
     local file="$1"
@@ -147,6 +153,7 @@ download_file_parts() {
     content_disposition=$(curl -sI --connect-timeout 15 "$url" | grep -i "Content-Disposition" | awk -F'filename=' '{print $2}' | tr -d '\r\n"')
     file_name=$(basename "$content_disposition")
     [ -z "$file_name" ] && file_name=$(basename "$url")
+    file_name=$(sanitize_filename "$file_name")
     TEMP_VIDEO_FILE="$file_name"
 
     total_size=$(curl -sI --connect-timeout 15 "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
@@ -162,31 +169,42 @@ download_file_parts() {
     mkdir -p "$SPLIT_DIR"
     log "INFO" "📁 Created directory for video parts: $SPLIT_DIR"
 
-    for i in $(seq 0 $((NUM_PARTS - 1))); do
-        local start=$((i * total_size / NUM_PARTS))
-        local end=$(((i + 1) * total_size / NUM_PARTS - 1))
-        [ $i -eq $((NUM_PARTS - 1)) ] && end=""
-
-        log "INFO" "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
-
-        temp_log="curl_log_$i.txt"  # Temporary log for curl output
-        curl -L --connect-timeout 15 "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
-        size_downloaded=$(cat "$temp_log")
-        rm -f "$temp_log"
-
-        if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
-            log "ERROR" "❌ Error downloading range $start-$end of $file_name."
-            send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name. Please check the URL and try again."
+    if [ "$total_size" -eq -1 ]; then
+        # Download as a single part if Content-Length is missing
+        log "INFO" "⬇️ Downloading entire file as a single part..."
+        curl -L --connect-timeout 15 "$url" -o "$TEMP_VIDEO_FILE" || {
+            log "ERROR" "❌ Error downloading the file."
+            send_telegram_message "$chat_id" "❌ Error downloading the file. Please check the URL and try again."
             return 1
-        fi
+        }
+    else
+        # Download in parts
+        for i in $(seq 0 $((NUM_PARTS - 1))); do
+            local start=$((i * total_size / NUM_PARTS))
+            local end=$(((i + 1) * total_size / NUM_PARTS - 1))
+            [ $i -eq $((NUM_PARTS - 1)) ] && end=""
 
-        if [ "$total_size" -ne -1 ]; then
-            progress=$(( (start + size_downloaded) * 100 / total_size ))
-            update_telegram_message "$chat_id" "$message_id" "📥 Downloading... ${progress}% completed."
-        else
-            update_telegram_message "$chat_id" "$message_id" "📥 Downloading part $((i + 1)) of $NUM_PARTS..."
-        fi
-    done
+            log "INFO" "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
+
+            temp_log="curl_log_$i.txt"  # Temporary log for curl output
+            curl -L --connect-timeout 15 "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
+            size_downloaded=$(cat "$temp_log")
+            rm -f "$temp_log"
+
+            if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
+                log "ERROR" "❌ Error downloading range $start-$end of $file_name."
+                send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name. Please check the URL and try again."
+                return 1
+            fi
+
+            if [ "$total_size" -ne -1 ]; then
+                progress=$(( (start + size_downloaded) * 100 / total_size ))
+                update_telegram_message "$chat_id" "$message_id" "📥 Downloading... ${progress}% completed."
+            else
+                update_telegram_message "$chat_id" "$message_id" "📥 Downloading part $((i + 1)) of $NUM_PARTS..."
+            fi
+        done
+    fi
     log "INFO" "✅ All parts downloaded successfully."
     return 0
 }
@@ -288,11 +306,13 @@ process_updates() {
                     continue
                 fi
 
-                # Merge file parts
-                if ! merge_file_parts; then
-                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ File merging failed!"
-                    cleanup
-                    continue
+                # Merge file parts (if applicable)
+                if [ "$total_size" -ne -1 ]; then
+                    if ! merge_file_parts; then
+                        update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ File merging failed!"
+                        cleanup
+                        continue
+                    fi
                 fi
 
                 # Check streamability and re-encode if necessary
