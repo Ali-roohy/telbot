@@ -11,7 +11,7 @@ fi
 TEMP_VIDEO_FILE="downloaded_video.mp4"
 SPLIT_DIR="video_parts"
 NUM_PARTS=${NUM_PARTS:-5}  # Number of parts to split the file into
-MAX_SIZE=${MAX_SIZE:-$((48 * 1024 * 1024))}  # 48MB Telegram file size limit
+MAX_SIZE=${MAX_SIZE:-$((10 * 1024 * 1024))}  # 48MB Telegram file size limit
 LOG_FILE="bot.log"
 ENABLE_STREAMABLE_CHECK=${ENABLE_STREAMABLE_CHECK:-true}  # Enable streamable check and re-encoding
 
@@ -303,6 +303,7 @@ process_updates() {
                 if ! download_file_parts "$message_text" "$chat_id" "$MESSAGE_ID"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Download failed! Please check the URL and try again."
                     cleanup
+                    offset=$((update_id + 1))  # Increment offset to skip this update
                     continue
                 fi
 
@@ -311,6 +312,7 @@ process_updates() {
                     if ! merge_file_parts; then
                         update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ File merging failed!"
                         cleanup
+                        offset=$((update_id + 1))  # Increment offset to skip this update
                         continue
                     fi
                 fi
@@ -319,6 +321,7 @@ process_updates() {
                 if ! check_streamable "$TEMP_VIDEO_FILE" "$chat_id"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Streamable check or re-encoding failed! Please ensure the video format is supported."
                     cleanup
+                    offset=$((update_id + 1))  # Increment offset to skip this update
                     continue
                 fi
 
@@ -327,6 +330,7 @@ process_updates() {
                 if ! upload_file "$TEMP_VIDEO_FILE" "$chat_id" "$MESSAGE_ID"; then
                     update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Upload failed!"
                     cleanup
+                    offset=$((update_id + 1))  # Increment offset to skip this update
                     continue
                 fi
 
@@ -345,4 +349,4 @@ process_updates() {
 # Start the Bot
 log "INFO" "🤖 Bot is running..."
 check_dependencies
-process_updates
+process_updates                
