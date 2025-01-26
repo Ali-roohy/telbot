@@ -3,16 +3,17 @@
 # Configuration
 BOT_TOKEN=${BOT_TOKEN_ENV}
 if [ -z "$BOT_TOKEN" ]; then
-    log "ERROR" "❌ BOT_TOKEN is not set. Exiting..."
+    echo "ERROR: ❌ BOT_TOKEN is not set. Exiting..."
     exit 1
 fi
 
+# Configurable settings (can be moved to environment variables)
 TEMP_VIDEO_FILE="downloaded_video.mp4"
 SPLIT_DIR="video_parts"
-NUM_PARTS=5
-MAX_SIZE=$((48 * 1024 * 1024))  # 48MB Telegram file size limit
+NUM_PARTS=${NUM_PARTS:-5}  # Number of parts to split the file into
+MAX_SIZE=${MAX_SIZE:-$((48 * 1024 * 1024))}  # 48MB Telegram file size limit
 LOG_FILE="bot.log"
-ENABLE_STREAMABLE_CHECK=true  # Optional streamable feature
+ENABLE_STREAMABLE_CHECK=${ENABLE_STREAMABLE_CHECK:-true}  # Enable streamable check and re-encoding
 
 # Redirect logs to a file
 exec > >(tee -i "$LOG_FILE")
@@ -83,7 +84,7 @@ check_streamable() {
                 log "INFO" "✅ Video successfully re-encoded to H.264 with a keyframe at the start."
             else
                 log "ERROR" "❌ Re-encoding failed."
-                send_telegram_message "$chat_id" "❌ Failed to re-encode the video to a streamable format."
+                send_telegram_message "$chat_id" "❌ Failed to re-encode the video to a streamable format. Please ensure the video is in a supported format."
                 return 1
             fi
         else
@@ -97,7 +98,7 @@ check_streamable() {
                 log "INFO" "✅ MOOV atom moved to the beginning, and a keyframe is forced at the start."
             else
                 log "ERROR" "❌ Failed to ensure streamable format."
-                send_telegram_message "$chat_id" "❌ Failed to ensure the video is streamable."
+                send_telegram_message "$chat_id" "❌ Failed to ensure the video is streamable. Please try again."
                 return 1
             fi
         fi
@@ -175,7 +176,7 @@ download_file_parts() {
 
         if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
             log "ERROR" "❌ Error downloading range $start-$end of $file_name."
-            send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name."
+            send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name. Please check the URL and try again."
             return 1
         fi
 
@@ -282,7 +283,7 @@ process_updates() {
                 # Download the video
                 update_telegram_message "$chat_id" "$MESSAGE_ID" "📥 Downloading file..."
                 if ! download_file_parts "$message_text" "$chat_id" "$MESSAGE_ID"; then
-                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Download failed!"
+                    update_telegram_message "$chat_id" "$MESSAGE_ID" "❌ Download failed! Please check the URL and try again."
                     cleanup
                     continue
                 fi
