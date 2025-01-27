@@ -11,9 +11,9 @@ fi
 TEMP_VIDEO_FILE="downloaded_video.mp4"
 SPLIT_DIR="video_parts"
 NUM_PARTS=${NUM_PARTS:-5}  # Number of parts to split the file into
-MAX_SIZE=${MAX_SIZE:-$((10 * 1024 * 1024))}  # 48MB Telegram file size limit
+MAX_SIZE=${MAX_SIZE:-$((5 * 1024 * 1024))}  # 48MB Telegram file size limit
 LOG_FILE="bot.log"
-ENABLE_STREAMABLE_CHECK=${ENABLE_STREAMABLE_CHECK:-true}  # Enable streamable check and re-encoding
+ENABLE_STREAMABLE_CHECK=${ENABLE_STREAMABLE_CHECK:-false}  # Enable streamable check and re-encoding
 
 # Redirect logs to a file
 exec > >(tee -i "$LOG_FILE")
@@ -41,16 +41,20 @@ update_telegram_message() {
     local chat_id="$1"
     local message_id="$2"
     local new_text="$3"
-    curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
-        -d "chat_id=$chat_id" \
-        -d "message_id=$message_id" \
-        -d "text=$new_text" \
-        -d "parse_mode=HTML" > /dev/null
+    # Only update if the message has changed
+    if [ "$new_text" != "$last_message" ]; then
+        curl -s -X POST "https://api.telegram.org/bot$BOT_TOKEN/editMessageText" \
+            -d "chat_id=$chat_id" \
+            -d "message_id=$message_id" \
+            -d "text=$new_text" \
+            -d "parse_mode=HTML" > /dev/null
+        last_message="$new_text"
+    fi
 }
 
 # Check dependencies
 check_dependencies() {
-    local dependencies=("curl" "ffmpeg" "ffprobe" "jq")
+    local dependencies=("curl" "ffmpeg" "ffprobe" "jq" "split")
     for dep in "${dependencies[@]}"; do
         if ! command -v "$dep" &> /dev/null; then
             log "ERROR" "❌ $dep is not installed. Please install it and try again."
@@ -158,7 +162,7 @@ download_file_parts() {
 
     total_size=$(curl -sI --connect-timeout 15 "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
 
-    if [ -z "$total_size" ]; then
+    if [ -z "$total_size" ] || [ "$total_size" -eq 0 ]; then
         send_telegram_message "$chat_id" "❌ Unable to determine file size. Progress tracking will be disabled."
         total_size=-1  # Set to -1 if size is not retrievable
     else
@@ -282,6 +286,15 @@ upload_file() {
 # Process incoming updates from Telegram
 process_updates() {
     local offset=0
+
+    # Fetch the latest update ID to ignore all current messages
+    latest_update=$(curl -s --connect-timeout 15 "https://api.telegram.org/bot$BOT_TOKEN/getUpdates")
+    latest_update_id=$(echo "$latest_update" | jq -r '.result[-1].update_id')
+    if [ -n "$latest_update_id" ]; then
+        offset=$((latest_update_id + 1))
+        log "INFO" "⏩ Skipping all current messages. Starting from update ID: $offset"
+    fi
+
     while true; do
         updates=$(curl -s --connect-timeout 15 "https://api.telegram.org/bot$BOT_TOKEN/getUpdates?offset=$offset")
         if [ -z "$(echo "$updates" | jq -c '.result[]')" ]; then
@@ -340,7 +353,7 @@ process_updates() {
                 send_telegram_message "$chat_id" "❌ Please send a valid URL."
             fi
 
-            offset=$((update_id + 1))
+            offset=$((update_id + 1))  # Increment offset to skip this update
         done
         sleep 1
     done
@@ -349,4 +362,6 @@ process_updates() {
 # Start the Bot
 log "INFO" "🤖 Bot is running..."
 check_dependencies
-process_updates                
+process_updates
+
+trap cleanup EXIT
