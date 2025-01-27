@@ -163,40 +163,40 @@ download_file_parts() {
     total_size=$(curl -sI --connect-timeout 15 "$url" | grep -i Content-Length | awk '{print $2}' | tr -d '\r')
 
     if [ -z "$total_size" ] || [ "$total_size" -eq 0 ]; then
+        log "ERROR" "Unable to determine file size. Progress tracking will be disabled."
         send_telegram_message "$chat_id" "❌ Unable to determine file size. Progress tracking will be disabled."
-        total_size=-1  # Set to -1 if size is not retrievable
+        total_size=-1
     else
         readable_size=$(human_readable_size "$total_size")
+        log "INFO" "Total file size: $readable_size. Starting download of $file_name..."
         send_telegram_message "$chat_id" "🌐 Total file size: $readable_size. Starting download of $file_name..."
     fi
 
     mkdir -p "$SPLIT_DIR"
-    log "INFO" "📁 Created directory for video parts: $SPLIT_DIR"
+    log "INFO" "Created directory for video parts: $SPLIT_DIR"
 
     if [ "$total_size" -eq -1 ]; then
-        # Download as a single part if Content-Length is missing
-        log "INFO" "⬇️ Downloading entire file as a single part..."
+        log "INFO" "Downloading entire file as a single part..."
         curl -L --connect-timeout 15 "$url" -o "$TEMP_VIDEO_FILE" || {
-            log "ERROR" "❌ Error downloading the file."
+            log "ERROR" "Error downloading the file."
             send_telegram_message "$chat_id" "❌ Error downloading the file. Please check the URL and try again."
             return 1
         }
     else
-        # Download in parts
         for i in $(seq 0 $((NUM_PARTS - 1))); do
             local start=$((i * total_size / NUM_PARTS))
             local end=$(((i + 1) * total_size / NUM_PARTS - 1))
             [ $i -eq $((NUM_PARTS - 1)) ] && end=""
 
-            log "INFO" "⬇️ Downloading range: $start-$end into $SPLIT_DIR/part_$i"
+            log "INFO" "Downloading range: $start-$end into $SPLIT_DIR/part_$i"
 
-            temp_log="curl_log_$i.txt"  # Temporary log for curl output
+            temp_log="curl_log_$i.txt"
             curl -L --connect-timeout 15 "$url" -H "Range: bytes=$start-$end" -o "$SPLIT_DIR/part_$i" --write-out "%{size_download}" 2>/dev/null > "$temp_log"
             size_downloaded=$(cat "$temp_log")
             rm -f "$temp_log"
 
             if [ -z "$size_downloaded" ] || [ "$size_downloaded" -eq 0 ]; then
-                log "ERROR" "❌ Error downloading range $start-$end of $file_name."
+                log "ERROR" "Error downloading range $start-$end of $file_name."
                 send_telegram_message "$chat_id" "❌ Error downloading range $start-$end of $file_name. Please check the URL and try again."
                 return 1
             fi
@@ -209,10 +209,9 @@ download_file_parts() {
             fi
         done
     fi
-    log "INFO" "✅ All parts downloaded successfully."
+    log "INFO" "All parts downloaded successfully."
     return 0
 }
-
 # Merge file parts
 merge_file_parts() {
     log "INFO" "🔗 Merging file parts..."
